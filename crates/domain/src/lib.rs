@@ -96,11 +96,11 @@ impl Order {
 
 #[derive(Debug, Clone)]
 pub struct Trade {
-    trade_id: u64,
-    maker_order_id: OrderId,
-    taker_order_id: OrderId,
-    maker_user_id: u64,
-    taker_user_id: u64,
-    price: u64,
-    quantity: u64,
+    pub trade_id: u64,
+    pub maker_order_id: OrderId,
+    pub taker_order_id: OrderId,
+    pub maker_user_id: u64,
+    pub taker_user_id: u64,
+    pub price: u64,
+    pub quantity: u64,
 }

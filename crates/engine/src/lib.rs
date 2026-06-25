@@ -1,10 +1,11 @@
-use domain::{Order, OrderType, Side};
+use domain::{Order, OrderStatus, OrderType, Side, Trade};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, VecDeque};
 
 pub struct OrderBook {
     bids: BTreeMap<Reverse<u64>, VecDeque<Order>>,
     asks: BTreeMap<u64, VecDeque<Order>>,
+    next_trade_id: u64,
 }
 
 impl OrderBook {
@@ -12,7 +13,14 @@ impl OrderBook {
         Self {
             bids: BTreeMap::new(),
             asks: BTreeMap::new(),
+            next_trade_id: 1,
         }
+    }
+
+    fn take_next_trade_id(&mut self) -> u64 {
+        let trade_id = self.next_trade_id;
+        self.next_trade_id += 1;
+        trade_id
     }
 
     pub fn add_resting_order(&mut self, order: Order) {
@@ -91,20 +99,36 @@ impl OrderBook {
         }
     }
 
-    pub fn submit_order(&mut self, order: Order) {
-        if self.can_match(&order) {
-            println!("Order can match");
-        } else {
-            match order.order_type {
+    pub fn submit_order(&mut self, mut taker: Order) -> Vec<Trade> {
+        let mut trade = Vec::new();
+
+        while taker.remaining_qty > 0 && self.can_match(&taker) {
+            let mut maker = self
+                .pop_best_opposite_order(taker.side)
+                .expect("no maker order was found");
+
+            let next_trade_id = self.take_next_trade_id();
+            let order_trade = self.execute_one_match(&mut taker, &mut maker, next_trade_id);
+
+            trade.push(order_trade);
+
+            if maker.remaining_qty > 0 {
+                self.reinsert_front(maker);
+            }
+        }
+
+        if taker.remaining_qty > 0 {
+            match taker.order_type {
                 OrderType::Limit => {
-                    println!("No match found: Resting in order book");
-                    self.add_resting_order(order);
+                    self.add_resting_order(taker);
                 }
                 OrderType::Market => {
-                    println!("No liquidity: Order cancelled");
+                    taker.status = OrderStatus::Cancelled;
                 }
             }
         }
+
+        trade
     }
 
     fn pop_best_opposite_order(&mut self, incoming_side: Side) -> Option<Order> {
@@ -141,6 +165,62 @@ impl OrderBook {
                 }
 
                 popped_queue
+            }
+        }
+    }
+
+    fn execute_one_match(&mut self, taker: &mut Order, maker: &mut Order, next_trade_id: u64 ) -> Trade {
+        let trade_qty = maker.remaining_qty.min(taker.remaining_qty);
+        taker.remaining_qty -= trade_qty;
+        maker.remaining_qty -= trade_qty;
+
+        if taker.remaining_qty == 0 {
+            taker.status = domain::OrderStatus::Filled;
+        } else if taker.original_qty == taker.remaining_qty {
+            taker.status = domain::OrderStatus::Open;
+        } else {
+            taker.status = domain::OrderStatus::PartiallyFilled;
+        }
+
+        if maker.remaining_qty == 0 {
+            maker.status = domain::OrderStatus::Filled;
+        } else if maker.original_qty == maker.remaining_qty {
+            maker.status = domain::OrderStatus::Open;
+        } else {
+            maker.status = domain::OrderStatus::PartiallyFilled;
+        }
+
+        let trade_price = maker.limit_price.expect("Makers Limit price not availabe");
+
+        Trade {
+            trade_id: next_trade_id,
+            maker_order_id: maker.id.clone(),
+            taker_order_id: taker.id.clone(),
+            maker_user_id: maker.user_id,
+            taker_user_id: taker.user_id,
+            price: trade_price,
+            quantity: trade_qty,
+        }
+    }
+
+    fn reinsert_front(&mut self, order: Order) {
+        match order.order_type {
+            OrderType::Limit => {
+                let order_price = order.limit_price.expect("Failed limit price");
+                match order.side {
+                    Side::Buy => {
+                        self.bids
+                            .entry(Reverse(order_price))
+                            .or_default()
+                            .push_front(order);
+                    }
+                    Side::Sell => {
+                        self.asks.entry(order_price).or_default().push_front(order);
+                    }
+                }
+            }
+            OrderType::Market => {
+                panic!("Market orders cannot be added into the order book");
             }
         }
     }
