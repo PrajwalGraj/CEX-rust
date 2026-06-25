@@ -1,0 +1,106 @@
+use std::fmt;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Buy,
+    Sell,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrderType {
+    Limit,
+    Market,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeInForce {
+    Gtc,
+    Ioc,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OrderStatus {
+    Open,
+    PartiallyFilled,
+    Filled,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OrderId(pub u64);
+
+impl fmt::Display for OrderId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "order-{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Order {
+    pub id: OrderId,
+    pub user_id: u64,
+
+    pub side: Side,
+    pub order_type: OrderType,
+    pub time_in_force: TimeInForce,
+
+    // For limit orders: Some(price).
+    // For market orders: None.
+    pub limit_price: Option<u64>,
+
+    pub original_qty: u64,
+    pub remaining_qty: u64,
+
+    pub status: OrderStatus,
+    pub sequence: u64,
+}
+
+impl Order {
+    pub fn new_limit(
+        id: u64,
+        user_id: u64,
+        side: Side,
+        price: u64,
+        quantity: u64,
+        sequence: u64,
+    ) -> Self {
+        Self {
+            id: OrderId(id),
+            user_id,
+            side,
+            order_type: OrderType::Limit,
+            time_in_force: TimeInForce::Gtc,
+            limit_price: Some(price),
+            original_qty: quantity,
+            remaining_qty: quantity,
+            status: OrderStatus::Open,
+            sequence,
+        }
+    }
+
+    pub fn new_market(id: u64, user_id: u64, side: Side, quantity: u64, sequence: u64) -> Self {
+        Self {
+            id: OrderId(id),
+            user_id,
+            side,
+            order_type: OrderType::Market,
+            time_in_force: TimeInForce::Ioc,
+            limit_price: None,
+            original_qty: quantity,
+            remaining_qty: quantity,
+            status: OrderStatus::Open,
+            sequence,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Trade {
+    trade_id: u64,
+    maker_order_id: OrderId,
+    taker_order_id: OrderId,
+    maker_user_id: u64,
+    taker_user_id: u64,
+    price: u64,
+    quantity: u64,
+}
