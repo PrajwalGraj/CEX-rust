@@ -25,6 +25,7 @@ pub enum BalanceError {
     InsufficientLockedBalance,
     AccountNotFound,
     AssetNotFound,
+    MarketBuyNotSupported,
     
 }
 
@@ -69,5 +70,25 @@ impl BalanceManager {
             Err(BalanceError::InsufficientLockedBalance)
         }
 
+    }
+
+    pub fn debit_locked(&mut self, user_id: u64, asset: Asset, amount: u64 ) -> Result<(), BalanceError>{
+        let account = self.accounts.get_mut(&user_id).ok_or(BalanceError::AccountNotFound)?;
+        let balance = account.balances.get_mut(&asset).ok_or(BalanceError::AssetNotFound)?;
+
+        if balance.locked >= amount {
+            balance.locked -= amount;
+            Ok(())
+        }else{
+            Err(BalanceError::InsufficientLockedBalance)
+        }
+    }
+
+    pub fn credit_available(&mut self, user_id: u64, asset: Asset, amount: u64) -> Result<(), BalanceError>{
+        let account = self.accounts.get_mut(&user_id).ok_or(BalanceError::AccountNotFound)?;
+        let balance = account.balances.entry(asset).or_insert(Balance { available: 0, locked: 0 });
+
+        balance.available += amount;
+        Ok(())
     }
 }
