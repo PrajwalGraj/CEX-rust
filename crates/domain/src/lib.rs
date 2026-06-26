@@ -114,6 +114,10 @@ pub struct Trade {
     pub taker_user_id: u64,
     pub price: u64,
     pub quantity: u64,
+    pub market: Market,
+
+    pub buyer_user_id: u64,
+    pub seller_user_id: u64,
 }
 
 

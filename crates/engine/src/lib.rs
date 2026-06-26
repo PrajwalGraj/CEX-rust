@@ -192,6 +192,16 @@ impl OrderBook {
 
         let trade_price = maker.limit_price.expect("Makers Limit price not availabe");
 
+        let mut buyer_id = 0;
+        let mut seller_id = 0;
+        
+
+        let (buyer_id, seller_id ) = if maker.side == Side::Buy {
+            (maker.user_id, taker.user_id)
+        }else{
+            (taker.user_id, maker.user_id)
+        };
+
         Trade {
             trade_id: next_trade_id,
             maker_order_id: maker.id.clone(),
@@ -200,6 +210,9 @@ impl OrderBook {
             taker_user_id: taker.user_id,
             price: trade_price,
             quantity: trade_qty,
+            market: maker.market,
+            buyer_user_id: buyer_id,
+            seller_user_id: seller_id,
         }
     }
 

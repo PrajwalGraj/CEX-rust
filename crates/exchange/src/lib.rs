@@ -23,7 +23,13 @@ impl Exchange {
         let market = order.market;
         let order_book = self.order_books.entry(market).or_insert(OrderBook::new());
 
-        Ok( order_book.submit_order(order))
+        let trades = order_book.submit_order(order);
+
+        for trade in &trades {
+            self.apply_trade(trade)?;
+        }
+
+        Ok(trades)
         
     }
 
@@ -43,5 +49,21 @@ impl Exchange {
                 self.balances.lock(order.user_id, asset, amount)
             }
         }
+    }
+
+    fn apply_trade( &mut self, trade: &Trade ) -> Result<(), BalanceError>{
+        let (base_asset, quote_asset ) = (trade.market.base, trade.market.quote);
+
+        let quote_amount = trade.quantity * trade.price;
+        let base_amount = trade.quantity;
+
+        self.balances.debit_locked(trade.buyer_user_id, quote_asset, quote_amount)?;
+        self.balances.credit_available(trade.buyer_user_id, base_asset, base_amount)?;
+
+        self.balances.debit_locked(trade.seller_user_id, base_asset, base_amount)?;
+        self.balances.credit_available(trade.seller_user_id, quote_asset, quote_amount)?;
+        
+
+        Ok(())
     }
 }
