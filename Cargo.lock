@@ -33,10 +33,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
+name = "app"
+version = "0.1.0"
+dependencies = [
+ "domain",
+ "engine",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
+
+[[package]]
+name = "balance"
+version = "0.1.0"
+dependencies = [
+ "domain",
+]
 
 [[package]]
 name = "bit-set"
@@ -262,6 +277,15 @@ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
  "windows-sys",
+]
+
+[[package]]
+name = "exchange"
+version = "0.1.0"
+dependencies = [
+ "balance",
+ "domain",
+ "engine",
 ]
 
 [[package]]

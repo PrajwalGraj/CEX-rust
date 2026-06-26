@@ -1,5 +1,12 @@
 use std::fmt;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum Asset {
+    BTC,
+    USDC,
+    SOL,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
     Buy,
@@ -41,6 +48,7 @@ pub struct Order {
     pub user_id: u64,
 
     pub side: Side,
+    pub market: Market,
     pub order_type: OrderType,
     pub time_in_force: TimeInForce,
 
@@ -60,6 +68,7 @@ impl Order {
         id: u64,
         user_id: u64,
         side: Side,
+        market : Market,
         price: u64,
         quantity: u64,
         sequence: u64,
@@ -68,6 +77,7 @@ impl Order {
             id: OrderId(id),
             user_id,
             side,
+            market,
             order_type: OrderType::Limit,
             time_in_force: TimeInForce::Gtc,
             limit_price: Some(price),
@@ -78,11 +88,12 @@ impl Order {
         }
     }
 
-    pub fn new_market(id: u64, user_id: u64, side: Side, quantity: u64, sequence: u64) -> Self {
+    pub fn new_market(id: u64, user_id: u64, side: Side, market: Market, quantity: u64, sequence: u64) -> Self {
         Self {
             id: OrderId(id),
             user_id,
             side,
+            market,
             order_type: OrderType::Market,
             time_in_force: TimeInForce::Ioc,
             limit_price: None,
@@ -103,4 +114,11 @@ pub struct Trade {
     pub taker_user_id: u64,
     pub price: u64,
     pub quantity: u64,
+}
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Market {
+    pub base: Asset,
+    pub quote: Asset,
 }

@@ -1,0 +1,10 @@
+[package]
+name = "exchange"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+engine = { path = "../engine" }
+balance = { path = "../balance" }
+domain = { path = "../domain" }
