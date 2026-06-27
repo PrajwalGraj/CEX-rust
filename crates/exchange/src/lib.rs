@@ -67,41 +67,23 @@ impl Exchange {
     }
 
     async fn apply_trade( &mut self, trade: &Trade ) -> Result<(), BalanceError>{
-        let (base_asset, quote_asset ) = (trade.market.base, trade.market.quote);
+        let (tx, rx) = oneshot::channel();
 
-        let quote_amount = trade.quantity * trade.price;
-        let base_amount = trade.quantity;
+        self.balance_tx
+            .send(BalanceCommand::ApplyTrade {
+                trade: trade.clone(),
+                reply_to: tx,
+            })
+            .await
+            .unwrap();
 
-        {
-            let (tx, rx) = oneshot::channel();
-            self.balance_tx.send(BalanceCommand::DebitLocked { user_id: trade.buyer_user_id, asset: quote_asset, amount: quote_amount, reply_to: tx }).await.unwrap();
-            rx.await.unwrap()?;
-        }
-
-        {
-            let (tx, rx) = oneshot::channel();
-            self.balance_tx.send(BalanceCommand::CreditAvailable { user_id: trade.buyer_user_id, asset: base_asset, amount: base_amount, reply_to: tx }).await.unwrap();
-            rx.await.unwrap()?;
-        }
-
-        {
-            let (tx, rx) = oneshot::channel();
-            self.balance_tx.send(BalanceCommand::DebitLocked { user_id: trade.seller_user_id, asset: base_asset, amount: base_amount, reply_to: tx}).await.unwrap();
-            rx.await.unwrap()?;
-        }
-        
-        {
-            let (tx, rx) = oneshot::channel();
-            self.balance_tx.send(BalanceCommand::CreditAvailable { user_id: trade.seller_user_id, asset: quote_asset, amount: quote_amount, reply_to: tx }).await.unwrap();
-            rx.await.unwrap()?;
-        }   
-
-        Ok(())
-        
+        rx.await.unwrap()
     }
 
     pub async fn deposit(&mut self, user_id: u64, asset: Asset, amount: u64 ){
-        self.balance_tx.send(BalanceCommand::Deposit { user_id, asset, amount }).await.unwrap();
+        let (tx, rx) = oneshot::channel();
+        self.balance_tx.send(BalanceCommand::Deposit { user_id, asset, amount , reply_to: tx}).await.unwrap();
+        rx.await.unwrap();
     }
 
     pub async fn get_balance(&self, user_id: u64, asset: Asset ) -> Option<Balance>{
