@@ -1,24 +1,35 @@
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::oneshot;
+
+use crate::balance_actor::{BalanceActor, BalanceCommand};
+
 use std::collections::HashMap;
 use engine::OrderBook;
 use balance::BalanceManager;
 use domain::{Market, Order, Side, Trade,OrderId, Asset};
 use balance::{BalanceError, Balance};
-
+pub mod balance_actor;
 pub struct Exchange {
     order_books: HashMap< Market, OrderBook>,
-    balances: BalanceManager,
+    balance_tx: Sender<BalanceCommand>,
 }
 
 impl Exchange {
     pub fn new() -> Self{
+
+        let (tx, rx) = mpsc::channel(32);
+        let actor = BalanceActor::new(rx);
+        tokio::spawn(actor.run());
+
         Self { 
             order_books: HashMap::new(), 
-            balances: BalanceManager::new() ,
+            balance_tx: tx,
         }
     }
 
-    pub fn submit_order(&mut self, order: Order) -> Result<Vec<Trade>, BalanceError>{
-        self.reserve_funds(&order)?;
+    pub async fn submit_order(&mut self, order: Order) -> Result<Vec<Trade>, BalanceError>{
+        self.reserve_funds(&order).await?;
 
         let market = order.market;
         let order_book = self.order_books.entry(market).or_insert(OrderBook::new());
@@ -26,53 +37,78 @@ impl Exchange {
         let trades = order_book.submit_order(order);
 
         for trade in &trades {
-            self.apply_trade(trade)?;
+            self.apply_trade(trade).await?;
         }
 
         Ok(trades)
         
     }
 
-    fn reserve_funds(&mut self, order: &Order) -> Result<(), BalanceError>{
+    async fn reserve_funds(&mut self, order: &Order) -> Result<(), BalanceError>{
         match order.side {
             Side::Buy => {
                 let asset = order.market.quote;
                 let price = order.limit_price.ok_or(BalanceError::MarketBuyNotSupported)?;
                 let amount = order.remaining_qty * price;
 
-                self.balances.lock(order.user_id, asset, amount)
+                let (tx, rx) = oneshot::channel();
+                self.balance_tx.send(BalanceCommand::Lock { user_id: order.user_id, asset, amount, reply_to: tx }).await.unwrap();
+                rx.await.unwrap()
             },
             Side::Sell => {
                 let asset = order.market.base;
                 let amount = order.remaining_qty;
 
-                self.balances.lock(order.user_id, asset, amount)
+                let (tx, rx) = oneshot::channel();
+                self.balance_tx.send(BalanceCommand::Lock { user_id: order.user_id, asset, amount, reply_to: tx }).await.unwrap();
+                rx.await.unwrap()
             }
         }
     }
 
-    fn apply_trade( &mut self, trade: &Trade ) -> Result<(), BalanceError>{
+    async fn apply_trade( &mut self, trade: &Trade ) -> Result<(), BalanceError>{
         let (base_asset, quote_asset ) = (trade.market.base, trade.market.quote);
 
         let quote_amount = trade.quantity * trade.price;
         let base_amount = trade.quantity;
 
-        self.balances.debit_locked(trade.buyer_user_id, quote_asset, quote_amount)?;
-        self.balances.credit_available(trade.buyer_user_id, base_asset, base_amount)?;
+        {
+            let (tx, rx) = oneshot::channel();
+            self.balance_tx.send(BalanceCommand::DebitLocked { user_id: trade.buyer_user_id, asset: quote_asset, amount: quote_amount, reply_to: tx }).await.unwrap();
+            rx.await.unwrap()?;
+        }
 
-        self.balances.debit_locked(trade.seller_user_id, base_asset, base_amount)?;
-        self.balances.credit_available(trade.seller_user_id, quote_asset, quote_amount)?;
+        {
+            let (tx, rx) = oneshot::channel();
+            self.balance_tx.send(BalanceCommand::CreditAvailable { user_id: trade.buyer_user_id, asset: base_asset, amount: base_amount, reply_to: tx }).await.unwrap();
+            rx.await.unwrap()?;
+        }
+
+        {
+            let (tx, rx) = oneshot::channel();
+            self.balance_tx.send(BalanceCommand::DebitLocked { user_id: trade.seller_user_id, asset: base_asset, amount: base_amount, reply_to: tx}).await.unwrap();
+            rx.await.unwrap()?;
+        }
         
+        {
+            let (tx, rx) = oneshot::channel();
+            self.balance_tx.send(BalanceCommand::CreditAvailable { user_id: trade.seller_user_id, asset: quote_asset, amount: quote_amount, reply_to: tx }).await.unwrap();
+            rx.await.unwrap()?;
+        }   
 
         Ok(())
+        
     }
 
-    pub fn deposit(&mut self, user_id: u64, asset: Asset, amount: u64 ){
-        self.balances.deposit(user_id, asset, amount);
+    pub async fn deposit(&mut self, user_id: u64, asset: Asset, amount: u64 ){
+        self.balance_tx.send(BalanceCommand::Deposit { user_id, asset, amount }).await.unwrap();
     }
 
-    pub fn get_balance(&self, user_id: u64, asset: Asset ) -> Option<&Balance>{
-        self.balances.get_balance(user_id, asset)
+    pub async fn get_balance(&self, user_id: u64, asset: Asset ) -> Option<Balance>{
+        let (tx, rx) = oneshot::channel();
+
+        self.balance_tx.send(BalanceCommand::GetBalance { user_id, asset, reply_to: tx }).await.unwrap();
+        rx.await.unwrap()
     }
 
     pub fn best_bid(&self, market: &Market) -> Option<u64>{

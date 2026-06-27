@@ -8,3 +8,4 @@ edition = "2024"
 engine = { path = "../engine" }
 balance = { path = "../balance" }
 domain = { path = "../domain" }
+tokio = { version = "1", features = ["full"] }

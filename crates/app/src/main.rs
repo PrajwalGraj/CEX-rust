@@ -1,42 +1,45 @@
+use std::collections::HashMap;
+
 use domain::{Asset, Market, Order, Side, Trade};
 use engine::OrderBook;
 use exchange::Exchange;
 
-fn main() {
-    let mut exchange = Exchange::new();
-    exchange.deposit(2, Asset::USDC, 1000);
-    exchange.deposit(1, Asset::SOL, 10);
+#[tokio::main]
+async fn main(){
 
-    print_user_balances(&exchange, 1, "Alice");
-    print_user_balances(&exchange, 2, "Bob");
+    let mut exchange = Exchange::new();
+    
+    exchange.deposit(2, Asset::USDC, 1000).await;
+    exchange.deposit(1, Asset::SOL, 10).await;
+
+    print_user_balances(&exchange, 1, "Alice").await;
+    print_user_balances(&exchange, 2, "Bob").await;
 
     let sol_usdc = Market {
         base: Asset::SOL,
         quote: Asset::USDC,
     };
 
-    exchange.submit_order(Order::new_limit(1, 1, Side::Sell, sol_usdc, 100, 3, 1));
-    exchange.submit_order(Order::new_limit(2, 1, Side::Sell, sol_usdc, 102, 2, 2));
+    exchange.submit_order(Order::new_limit(1, 1, Side::Sell, sol_usdc, 100, 3, 1)).await;
+    exchange.submit_order(Order::new_limit(2, 1, Side::Sell, sol_usdc, 102, 2, 2)).await;
 
-    let trades = exchange
-        .submit_order(Order::new_limit(3, 2, Side::Buy, sol_usdc, 105, 6, 3))
-        .expect("errro");
+    let trades = exchange.submit_order(Order::new_limit(3, 2, Side::Buy, sol_usdc, 105, 6, 3)).await.unwrap();
     print_trades(&trades);
 
-    print_user_balances(&exchange, 1, "Alice");
-    print_user_balances(&exchange, 2, "Bob");
+    print_user_balances(&exchange, 1, "Alice").await;
+    print_user_balances(&exchange, 2, "Bob").await;
 
     print_order_book(&exchange, &sol_usdc);
 }
 
-fn print_user_balances(exchange: &Exchange, user_id: u64, name: &str) {
+async fn print_user_balances(exchange: &Exchange, user_id: u64, name: &str) {
     let assets = [Asset::BTC, Asset::SOL, Asset::USDC];
     println!("==========================");
     println!("{} ({})", name, user_id);
     println!("==========================\n");
     for asset in assets {
         println!("{:?}", asset);
-        match exchange.get_balance(user_id, asset) {
+        match exchange.get_balance(user_id, asset).await {
             Some(balance) => {
                 println!("  Available : {}", balance.available);
                 println!("  Locked    : {}\n", balance.locked);

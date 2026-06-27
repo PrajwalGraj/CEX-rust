@@ -126,10 +126,10 @@ impl BalanceManager {
         Ok(())
     }
 
-    pub fn get_balance(&self, user_id: u64, asset: Asset) -> Option<&Balance> {
+    pub fn get_balance(&self, user_id: u64, asset: Asset) -> Option<Balance> {
         let account = self.accounts.get(&user_id)?;
         let balance = account.balances.get(&asset)?;
 
-        Some(balance)
+        Some(balance.clone())
     }
 }
