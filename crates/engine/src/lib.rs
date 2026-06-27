@@ -169,7 +169,12 @@ impl OrderBook {
         }
     }
 
-    fn execute_one_match(&mut self, taker: &mut Order, maker: &mut Order, next_trade_id: u64 ) -> Trade {
+    fn execute_one_match(
+        &mut self,
+        taker: &mut Order,
+        maker: &mut Order,
+        next_trade_id: u64,
+    ) -> Trade {
         let trade_qty = maker.remaining_qty.min(taker.remaining_qty);
         taker.remaining_qty -= trade_qty;
         maker.remaining_qty -= trade_qty;
@@ -194,11 +199,10 @@ impl OrderBook {
 
         let mut buyer_id = 0;
         let mut seller_id = 0;
-        
 
-        let (buyer_id, seller_id ) = if maker.side == Side::Buy {
+        let (buyer_id, seller_id) = if maker.side == Side::Buy {
             (maker.user_id, taker.user_id)
-        }else{
+        } else {
             (taker.user_id, maker.user_id)
         };
 

@@ -7,3 +7,4 @@ edition = "2024"
 
 domain = { path = "../domain" }
 engine = { path = "../engine" }
+exchange = { path = "../exchange" }

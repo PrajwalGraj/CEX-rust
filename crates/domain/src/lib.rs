@@ -68,7 +68,7 @@ impl Order {
         id: u64,
         user_id: u64,
         side: Side,
-        market : Market,
+        market: Market,
         price: u64,
         quantity: u64,
         sequence: u64,
@@ -88,7 +88,14 @@ impl Order {
         }
     }
 
-    pub fn new_market(id: u64, user_id: u64, side: Side, market: Market, quantity: u64, sequence: u64) -> Self {
+    pub fn new_market(
+        id: u64,
+        user_id: u64,
+        side: Side,
+        market: Market,
+        quantity: u64,
+        sequence: u64,
+    ) -> Self {
         Self {
             id: OrderId(id),
             user_id,
@@ -119,7 +126,6 @@ pub struct Trade {
     pub buyer_user_id: u64,
     pub seller_user_id: u64,
 }
-
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Market {

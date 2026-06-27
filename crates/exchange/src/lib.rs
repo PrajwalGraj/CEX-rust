@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use engine::OrderBook;
 use balance::BalanceManager;
-use domain::{Market, Order, Side, Trade};
-use balance::{BalanceError};
+use domain::{Market, Order, Side, Trade,OrderId, Asset};
+use balance::{BalanceError, Balance};
 
 pub struct Exchange {
     order_books: HashMap< Market, OrderBook>,
@@ -13,7 +13,7 @@ impl Exchange {
     pub fn new() -> Self{
         Self { 
             order_books: HashMap::new(), 
-            balances: BalanceManager::new() 
+            balances: BalanceManager::new() ,
         }
     }
 
@@ -65,5 +65,21 @@ impl Exchange {
         
 
         Ok(())
+    }
+
+    pub fn deposit(&mut self, user_id: u64, asset: Asset, amount: u64 ){
+        self.balances.deposit(user_id, asset, amount);
+    }
+
+    pub fn get_balance(&self, user_id: u64, asset: Asset ) -> Option<&Balance>{
+        self.balances.get_balance(user_id, asset)
+    }
+
+    pub fn best_bid(&self, market: &Market) -> Option<u64>{
+        self.order_books.get(market).and_then(|book| book.best_bid())
+    }
+
+    pub fn best_ask(&self, market: &Market) -> Option<u64>{
+        self.order_books.get(market).and_then(|book| book.best_ask())
     }
 }
