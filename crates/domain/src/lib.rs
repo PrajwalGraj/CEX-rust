@@ -1,25 +1,28 @@
 use std::fmt;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+use serde::{Deserialize, Serialize};
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Asset {
     BTC,
     USDC,
     SOL,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Side {
     Buy,
     Sell,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq , Serialize, Deserialize)]
 pub enum OrderType {
     Limit,
     Market,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq , Serialize, Deserialize)]
 pub enum TimeInForce {
     Gtc,
     Ioc,
@@ -32,6 +35,29 @@ pub enum OrderStatus {
     Filled,
     Cancelled,
 }
+
+
+#[derive(Debug, Clone)]
+pub struct Trade {
+    pub trade_id: u64,
+    pub maker_order_id: OrderId,
+    pub taker_order_id: OrderId,
+    pub maker_user_id: u64,
+    pub taker_user_id: u64,
+    pub price: u64,
+    pub quantity: u64,
+    pub market: Market,
+
+    pub buyer_user_id: u64,
+    pub seller_user_id: u64,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash , Serialize, Deserialize)]
+pub struct Market {
+    pub base: Asset,
+    pub quote: Asset,
+}
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderId(pub u64);
@@ -110,25 +136,4 @@ impl Order {
             sequence,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Trade {
-    pub trade_id: u64,
-    pub maker_order_id: OrderId,
-    pub taker_order_id: OrderId,
-    pub maker_user_id: u64,
-    pub taker_user_id: u64,
-    pub price: u64,
-    pub quantity: u64,
-    pub market: Market,
-
-    pub buyer_user_id: u64,
-    pub seller_user_id: u64,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Market {
-    pub base: Asset,
-    pub quote: Asset,
 }

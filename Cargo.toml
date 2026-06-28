@@ -2,6 +2,14 @@
 members = [
     "crates/domain",
     "crates/engine",
-    "crates/app", "crates/balance", "crates/exchange",
+    "crates/app", 
+    "crates/balance", 
+    "crates/exchange", 
+    "crates/api",
 ]
 resolver = "2"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
