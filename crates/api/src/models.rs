@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use domain::Asset;
 use domain::{Market, Side};
+use balance::Balance;
 
 #[derive(Debug, Deserialize)]
 pub struct DepositRequest {
@@ -23,4 +24,25 @@ pub struct PlaceOrderRequest {
     pub price: u64,
     pub quantity: u64,
     pub sequence: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BalanceResponse {
+    pub btc: Option<Balance>,
+    pub sol: Option<Balance>,
+    pub usdc: Option<Balance>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrderBookResponse {
+    pub market: String,
+    pub best_bid: Option<u64>,
+    pub best_ask: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MarketResponse {
+    pub market: String,
+    pub best_bid: Option<u64>,
+    pub best_ask: Option<u64>,
 }

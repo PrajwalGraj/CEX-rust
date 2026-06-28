@@ -37,6 +37,7 @@ name = "api"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "balance",
  "domain",
  "exchange",
  "serde",
@@ -123,6 +124,8 @@ name = "balance"
 version = "0.1.0"
 dependencies = [
  "domain",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

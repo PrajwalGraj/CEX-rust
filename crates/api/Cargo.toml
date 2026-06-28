@@ -11,3 +11,4 @@ serde_json = { workspace = true }
 
 exchange = { path = "../exchange" }
 domain = { path = "../domain" }
+balance = { path = "../balance" }
