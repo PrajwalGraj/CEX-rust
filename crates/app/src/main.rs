@@ -67,10 +67,10 @@ fn print_trades(trades: &[Trade]) {
     }
 }
 
-fn print_order_book(exchange: &Exchange, market: &Market) {
+async fn print_order_book(exchange: &Exchange, market: &Market) {
     println!("==========================");
     println!("Final Order Book");
     println!("==========================\n");
-    println!("Best Bid: {:?}", exchange.best_bid(market));
-    println!("Best Ask: {:?}\n", exchange.best_ask(market));
+    println!("Best Bid: {:?}", exchange.best_bid(market).await);
+    println!("Best Ask: {:?}\n", exchange.best_ask(market).await);
 }

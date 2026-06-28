@@ -3,15 +3,16 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 
 use crate::balance_actor::{BalanceActor, BalanceCommand};
-
+use crate::market_actor::{MarketActor, MarketCommand};
 use std::collections::HashMap;
 use engine::OrderBook;
 use balance::BalanceManager;
 use domain::{Market, Order, Side, Trade,OrderId, Asset};
 use balance::{BalanceError, Balance};
 pub mod balance_actor;
+pub mod market_actor;
 pub struct Exchange {
-    order_books: HashMap< Market, OrderBook>,
+    markets: HashMap<Market, Sender<MarketCommand>>,
     balance_tx: Sender<BalanceCommand>,
 }
 
@@ -23,7 +24,7 @@ impl Exchange {
         tokio::spawn(actor.run());
 
         Self { 
-            order_books: HashMap::new(), 
+            markets : HashMap::new(),
             balance_tx: tx,
         }
     }
@@ -32,9 +33,20 @@ impl Exchange {
         self.reserve_funds(&order).await?;
 
         let market = order.market;
-        let order_book = self.order_books.entry(market).or_insert(OrderBook::new());
+        let sender = self.markets.entry(market).or_insert_with(|| {
+            let (tx, rx) = mpsc::channel(32);
 
-        let trades = order_book.submit_order(order);
+            let actor = MarketActor::new(rx);
+            tokio::spawn(actor.run());
+
+            tx
+        });
+
+        let (tx, rx) = oneshot::channel();
+
+        sender.send(MarketCommand::PlaceOrder { order, reply_to: tx }).await.unwrap();
+
+        let trades = rx.await.unwrap();
 
         for trade in &trades {
             self.apply_trade(trade).await?;
@@ -69,13 +81,7 @@ impl Exchange {
     async fn apply_trade( &mut self, trade: &Trade ) -> Result<(), BalanceError>{
         let (tx, rx) = oneshot::channel();
 
-        self.balance_tx
-            .send(BalanceCommand::ApplyTrade {
-                trade: trade.clone(),
-                reply_to: tx,
-            })
-            .await
-            .unwrap();
+        self.balance_tx.send(BalanceCommand::ApplyTrade { trade: trade.clone(), reply_to: tx }).await.unwrap();
 
         rx.await.unwrap()
     }
@@ -93,11 +99,18 @@ impl Exchange {
         rx.await.unwrap()
     }
 
-    pub fn best_bid(&self, market: &Market) -> Option<u64>{
-        self.order_books.get(market).and_then(|book| book.best_bid())
+    pub async fn best_bid(&self, market: &Market) -> Option<u64>{
+        let sender = self.markets.get(market)?;
+        let (tx, rx) = oneshot::channel();
+        sender.send(MarketCommand::GetBestBid { reply_to: tx }).await.unwrap();
+        rx.await.unwrap()
     }
 
-    pub fn best_ask(&self, market: &Market) -> Option<u64>{
-        self.order_books.get(market).and_then(|book| book.best_ask())
+    pub async fn best_ask(&self, market: &Market) -> Option<u64>{
+        let sender = self.markets.get(market)?;
+
+        let (tx, rx) = oneshot::channel();
+        sender.send(MarketCommand::GetBestAsk { reply_to: tx }).await.unwrap();
+        rx.await.unwrap()
     }
 }
