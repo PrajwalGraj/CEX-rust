@@ -1,4 +1,4 @@
-use domain::{Order, OrderStatus, OrderType, Side, Trade};
+use domain::{MatchResult, Order, OrderStatus, OrderType, Side, Trade};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, VecDeque};
 
@@ -99,8 +99,10 @@ impl OrderBook {
         }
     }
 
-    pub fn submit_order(&mut self, mut taker: Order) -> Vec<Trade> {
-        let mut trade = Vec::new();
+    pub fn submit_order(&mut self, mut taker: Order) -> MatchResult {
+        let mut trades = Vec::new();
+        let mut new_orders = Vec::new();
+        let mut updated_orders = Vec::new();
 
         while taker.remaining_qty > 0 && self.can_match(&taker) {
             let mut maker = self
@@ -110,7 +112,8 @@ impl OrderBook {
             let next_trade_id = self.take_next_trade_id();
             let order_trade = self.execute_one_match(&mut taker, &mut maker, next_trade_id);
 
-            trade.push(order_trade);
+            trades.push(order_trade);
+            updated_orders.push(maker.clone());
 
             if maker.remaining_qty > 0 {
                 self.reinsert_front(maker);
@@ -120,15 +123,23 @@ impl OrderBook {
         if taker.remaining_qty > 0 {
             match taker.order_type {
                 OrderType::Limit => {
-                    self.add_resting_order(taker);
+                    self.add_resting_order(taker.clone());
+                    new_orders.push(taker);
                 }
                 OrderType::Market => {
                     taker.status = OrderStatus::Cancelled;
+                    updated_orders.push(taker);
                 }
             }
+        }else{
+            updated_orders.push(taker);
         }
 
-        trade
+        MatchResult { 
+            trades,
+            new_orders,
+            updated_orders,
+        }
     }
 
     fn pop_best_opposite_order(&mut self, incoming_side: Side) -> Option<Order> {

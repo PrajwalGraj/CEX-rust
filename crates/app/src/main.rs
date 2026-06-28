@@ -7,7 +7,7 @@ use exchange::Exchange;
 #[tokio::main]
 async fn main(){
 
-    let mut exchange = Exchange::new();
+    let mut exchange = Exchange::new().await;
     
     exchange.deposit(2, Asset::USDC, 1000).await;
     exchange.deposit(1, Asset::SOL, 10).await;

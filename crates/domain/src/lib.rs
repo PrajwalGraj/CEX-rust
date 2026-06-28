@@ -10,10 +10,29 @@ pub enum Asset {
     SOL,
 }
 
+impl fmt::Display for Asset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Asset::BTC => write!(f, "BTC"),
+            Asset::SOL => write!(f, "SOL"),
+            Asset::USDC => write!(f, "USDC"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Side {
     Buy,
     Sell,
+}
+
+impl fmt::Display for Side {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Side::Buy => write!(f, "BUY"),
+            Side::Sell => write!(f, "SELL"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq , Serialize, Deserialize)]
@@ -22,10 +41,27 @@ pub enum OrderType {
     Market,
 }
 
+impl fmt::Display for OrderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderType::Limit => write!(f, "LIMIT"),
+            OrderType::Market => write!(f, "MARKET"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq , Serialize, Deserialize)]
 pub enum TimeInForce {
     Gtc,
     Ioc,
+}
+impl fmt::Display for TimeInForce {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TimeInForce::Gtc => write!(f, "GTC"),
+            TimeInForce::Ioc => write!(f, "IOC"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +70,17 @@ pub enum OrderStatus {
     PartiallyFilled,
     Filled,
     Cancelled,
+}
+
+impl fmt::Display for OrderStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderStatus::Open => write!(f, "OPEN"),
+            OrderStatus::PartiallyFilled => write!(f, "PARTIALLY_FILLED"),
+            OrderStatus::Filled => write!(f, "FILLED"),
+            OrderStatus::Cancelled => write!(f, "CANCELLED"),
+        }
+    }
 }
 
 
@@ -58,6 +105,12 @@ pub struct Market {
     pub quote: Asset,
 }
 
+#[derive(Debug)]
+pub struct MatchResult {
+    pub trades: Vec<Trade>,
+    pub new_orders: Vec<Order>,
+    pub updated_orders: Vec<Order>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderId(pub u64);

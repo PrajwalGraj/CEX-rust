@@ -7,5 +7,7 @@ edition = "2024"
 [dependencies]
 engine = { path = "../engine" }
 balance = { path = "../balance" }
+storage = { path = "../storage" }
 domain = { path = "../domain" }
 tokio = { version = "1", features = ["full"] }
+dotenvy = { workspace = true }

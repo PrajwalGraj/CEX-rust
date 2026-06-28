@@ -1,3 +1,4 @@
+use storage::{Database, BalanceRepository, OrderRepository, TradeRepository};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
@@ -14,18 +15,30 @@ pub mod market_actor;
 pub struct Exchange {
     markets: HashMap<Market, Sender<MarketCommand>>,
     balance_tx: Sender<BalanceCommand>,
+    database: Database,
 }
 
 impl Exchange {
-    pub fn new() -> Self{
+    pub async fn new() -> Self{
+        dotenvy::dotenv().ok();
+
+        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+
+        let database = Database::connect( &database_url )
+        .await
+        .unwrap();
+
+        let balance_repo = BalanceRepository::new(database.pool());
 
         let (tx, rx) = mpsc::channel(32);
-        let actor = BalanceActor::new(rx);
+        let actor = BalanceActor::new(rx, balance_repo);
+        
         tokio::spawn(actor.run());
 
         Self { 
             markets : HashMap::new(),
             balance_tx: tx,
+            database
         }
     }
 
@@ -33,14 +46,21 @@ impl Exchange {
         self.reserve_funds(&order).await?;
 
         let market = order.market;
-        let sender = self.markets.entry(market).or_insert_with(|| {
+        
+        if !self.markets.contains_key(&market) {
             let (tx, rx) = mpsc::channel(32);
 
-            let actor = MarketActor::new(rx);
+            let order_repo = OrderRepository::new(self.database.pool());
+            let trade_repo = TradeRepository::new(self.database.pool());
+
+            let actor = MarketActor::new(rx, order_repo, trade_repo);
+
             tokio::spawn(actor.run());
 
-            tx
-        });
+            self.markets.insert(market, tx);
+        }
+
+        let sender = self.markets.get(&market).unwrap();
 
         let (tx, rx) = oneshot::channel();
 

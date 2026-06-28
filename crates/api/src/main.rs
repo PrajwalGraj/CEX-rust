@@ -18,7 +18,7 @@ async fn health() -> &'static str {
 
 #[tokio::main]
 async fn main() {
-    let exchange = Arc::new(Mutex::new(Exchange::new()));
+    let exchange = Arc::new(Mutex::new(Exchange::new().await));
 
     let app = Router::new()
         .route("/", get(health))
