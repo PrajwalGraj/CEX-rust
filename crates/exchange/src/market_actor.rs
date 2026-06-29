@@ -1,7 +1,7 @@
 use tokio::sync::oneshot;
 
 use balance::BalanceError;
-use domain::{Order, Trade};
+use domain::{Order, Trade, OrderBookSnapshot, OrderId};
 use tokio::sync::mpsc::Receiver;
 use storage::{OrderRepository, TradeRepository};
 
@@ -18,6 +18,13 @@ pub enum MarketCommand {
 
     GetBestAsk {
         reply_to: oneshot::Sender<Option<u64>>,
+    },
+    GetOrderBook {
+        reply_to: oneshot::Sender<OrderBookSnapshot>,
+    },
+    CancelOrder {
+        order_id: OrderId,
+        reply_to: oneshot::Sender<Option<Order>>,
     },
 }
 
@@ -80,7 +87,27 @@ impl MarketActor {
                 MarketCommand::GetBestAsk { reply_to } => {
                     let ask = self.order_book.best_ask();
                     reply_to.send(ask).unwrap();
-                }
+                },
+                MarketCommand::GetOrderBook { reply_to } => {
+                    let snapshot = self.order_book.snapshot();
+                    reply_to.send(snapshot).unwrap();
+                },
+                MarketCommand::CancelOrder { order_id, reply_to } => {
+                    let cancelled_order = self.order_book.cancel_order(order_id);
+
+                    if let Some(mut order) = cancelled_order {
+                        order.status = domain::OrderStatus::Cancelled;
+
+                        self.order_repository
+                            .update_order(&order)
+                            .await
+                            .unwrap();
+
+                        reply_to.send(Some(order)).unwrap();
+                    } else {
+                        reply_to.send(None).unwrap();
+                    }
+                },
             }
         }
     }

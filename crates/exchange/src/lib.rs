@@ -8,7 +8,7 @@ use crate::market_actor::{MarketActor, MarketCommand};
 use std::collections::HashMap;
 use engine::OrderBook;
 use balance::BalanceManager;
-use domain::{Market, Order, Side, Trade,OrderId, Asset};
+use domain::{Market, Order, Side, Trade,OrderId, Asset, OrderBookSnapshot};
 use balance::{BalanceError, Balance};
 pub mod balance_actor;
 pub mod market_actor;
@@ -98,6 +98,40 @@ impl Exchange {
         }
     }
 
+    async fn unlock_reserved_funds(&mut self, order: &Order) {
+        
+        let (asset, amount) = match order.side {
+            Side::Buy => {
+                let price = order.limit_price.unwrap();
+                (
+                    order.market.quote,
+                    order.remaining_qty * price,
+                )
+            }
+
+            Side::Sell => {
+                (
+                    order.market.base,
+                    order.remaining_qty,
+                )
+            }
+        };
+
+        let (tx, rx) = oneshot::channel();
+
+        self.balance_tx
+            .send(BalanceCommand::Unlock {
+                user_id: order.user_id,
+                asset,
+                amount,
+                reply_to: tx,
+            })
+            .await
+            .unwrap();
+
+        rx.await.unwrap().unwrap();
+    }
+
     async fn apply_trade( &mut self, trade: &Trade ) -> Result<(), BalanceError>{
         let (tx, rx) = oneshot::channel();
 
@@ -132,5 +166,43 @@ impl Exchange {
         let (tx, rx) = oneshot::channel();
         sender.send(MarketCommand::GetBestAsk { reply_to: tx }).await.unwrap();
         rx.await.unwrap()
+    }
+
+    pub async fn order_book(&self, market: &Market ) -> Option<OrderBookSnapshot> {
+        let sender = self.markets.get(market)?;
+
+        let (tx, rx) = oneshot::channel();
+        sender
+            .send(MarketCommand::GetOrderBook { reply_to: tx })
+            .await
+            .unwrap();
+
+        rx.await.ok()
+    }
+
+    pub async fn cancel_order( &mut self, market: &Market, order_id: OrderId ) -> bool {
+        let sender = match self.markets.get(market) {
+            Some(sender) => sender,
+            None => return false,
+        };
+
+        let (tx, rx) = oneshot::channel();
+
+        sender
+            .send(MarketCommand::CancelOrder {
+                order_id,
+                reply_to: tx,
+            })
+            .await
+            .unwrap();
+
+        let cancelled_order = match rx.await.unwrap() {
+            Some(order) => order,
+            None => return false,
+        };
+
+        self.unlock_reserved_funds(&cancelled_order).await;
+
+        true
     }
 }

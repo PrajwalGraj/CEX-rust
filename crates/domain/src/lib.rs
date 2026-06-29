@@ -112,6 +112,19 @@ pub struct MatchResult {
     pub updated_orders: Vec<Order>,
 }
 
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OrderBookLevel {
+    pub price: u64,
+    pub quantity: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OrderBookSnapshot {
+    pub bids: Vec<OrderBookLevel>,
+    pub asks: Vec<OrderBookLevel>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderId(pub u64);
 

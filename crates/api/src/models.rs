@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use domain::Asset;
-use domain::{Market, Side};
+use domain::{Market, Side,OrderBookSnapshot, OrderBookLevel};
 use balance::Balance;
 
 #[derive(Debug, Deserialize)]
@@ -36,8 +36,8 @@ pub struct BalanceResponse {
 #[derive(Debug, Serialize)]
 pub struct OrderBookResponse {
     pub market: String,
-    pub best_bid: Option<u64>,
-    pub best_ask: Option<u64>,
+    pub bids: Vec<OrderBookLevel>,
+    pub asks: Vec<OrderBookLevel>,
 }
 
 #[derive(Debug, Serialize)]
@@ -45,4 +45,9 @@ pub struct MarketResponse {
     pub market: String,
     pub best_bid: Option<u64>,
     pub best_ask: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CancelOrderRequest {
+    pub market: Market,
 }

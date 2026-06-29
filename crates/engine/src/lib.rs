@@ -1,4 +1,4 @@
-use domain::{MatchResult, Order, OrderStatus, OrderType, Side, Trade};
+use domain::{MatchResult, Order, OrderStatus,OrderId, OrderType, Side, Trade, OrderBookSnapshot, OrderBookLevel};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, VecDeque};
 
@@ -251,5 +251,66 @@ impl OrderBook {
                 panic!("Market orders cannot be added into the order book");
             }
         }
+    }
+
+    pub fn snapshot(&self) -> OrderBookSnapshot {
+        let bids = self
+            .bids
+            .iter()
+            .map(|(price, orders)| OrderBookLevel {
+                price: price.0,
+                quantity: orders.iter().map(|o| o.remaining_qty).sum(),
+            })
+            .collect();
+
+        let asks = self
+            .asks
+            .iter()
+            .map(|(price, orders)| OrderBookLevel {
+                price: *price,
+                quantity: orders.iter().map(|o| o.remaining_qty).sum(),
+            })
+            .collect();
+
+        OrderBookSnapshot { bids, asks }
+    }
+
+    pub fn cancel_order(&mut self, order_id: OrderId) -> Option<Order> {
+
+        let mut bid_price_to_remove = None;
+
+        for (price, queue) in self.bids.iter_mut() {
+            if let Some(index) = queue.iter().position(|o| o.id == order_id) {
+                let order = queue.remove(index);
+
+                if queue.is_empty() {
+                    bid_price_to_remove = Some(*price);
+                }
+                if let Some(price) = bid_price_to_remove {
+                    self.bids.remove(&price);
+                }
+
+                return order;
+            }
+        }
+
+
+        let mut ask_price_to_remove = None;
+
+        for (price, queue) in self.asks.iter_mut() {
+            if let Some(index) = queue.iter().position(|o| o.id == order_id) {
+                let order = queue.remove(index);
+
+                if queue.is_empty() {
+                    ask_price_to_remove = Some(*price);
+                }
+
+                if let Some(price) = ask_price_to_remove {
+                    self.asks.remove(&price);
+                }
+                return order;
+            }
+        }
+        None
     }
 }

@@ -6,8 +6,8 @@ use axum::extract::Path;
 use axum::{
     Router, extract::{Json, State}, http::request, routing::{get, post},
 };
-use domain::{Asset, Market, Order};
-use crate::models::{ ApiResponse, BalanceResponse, DepositRequest, MarketResponse, OrderBookResponse, PlaceOrderRequest };
+use domain::{Asset, Market, Order, OrderId};
+use crate::models::{ ApiResponse, BalanceResponse, DepositRequest, MarketResponse, OrderBookResponse, PlaceOrderRequest, CancelOrderRequest };
 
 use tokio::sync::Mutex;
 use exchange::Exchange;
@@ -27,6 +27,7 @@ async fn main() {
         .route("/balances/{user_id}", get(get_balance))
         .route("/book/{market}", get(get_order_book))
         .route("/markets", get(get_markets))
+        .route("/orders/{order_id}/cancel", post(cancel_order))
         .with_state(exchange);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
@@ -110,10 +111,14 @@ async fn get_order_book(
         _ => panic!("invalid market"),
     };
 
-    let best_bid = exchange.best_bid(&market).await;
-    let best_ask = exchange.best_ask(&market).await;
+    let snapshot = match exchange.order_book(&market).await {
+        Some(snapshot) => snapshot,
+        None => {
+            return Json(OrderBookResponse { market: market_name, bids: vec![], asks: vec![] })
+        }
+    };
 
-    Json(OrderBookResponse { market: market_name, best_bid, best_ask })
+    Json(OrderBookResponse { market: market_name, bids: snapshot.bids, asks: snapshot.asks })
 }
 
 async fn get_markets(
@@ -147,4 +152,30 @@ async fn get_markets(
     }
 
     Json(responder)
+}
+
+
+async fn cancel_order(
+    State(exchange): State<Arc<Mutex<Exchange>>>,
+    Path(order_id): Path<u64>,
+    Json(request): Json<CancelOrderRequest>,
+) -> Json<ApiResponse> {
+    let mut exchange = exchange.lock().await;
+
+    let success = exchange
+        .cancel_order(
+            &request.market,
+            OrderId(order_id),
+        )
+        .await;
+
+    if success {
+        Json(ApiResponse {
+            status: "success".to_string(),
+        })
+    } else {
+        Json(ApiResponse {
+            status: "failed".to_string(),
+        })
+    }
 }
