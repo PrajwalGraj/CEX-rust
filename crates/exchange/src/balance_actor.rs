@@ -33,7 +33,13 @@ pub enum BalanceCommand {
     ApplyTrade {
         trade: Trade,
         reply_to: oneshot::Sender<Result<(), BalanceError>>,
-    }
+    },
+    LoadBalance {
+        user_id: u64,
+        asset: Asset,
+        available: u64,
+        locked: u64,
+    },
 }
 
 pub struct BalanceActor {
@@ -94,6 +100,15 @@ impl BalanceActor {
                     let result = self.settle_trade(&trade).await;
                     
                     reply_to.send(result).unwrap();
+                },
+                BalanceCommand::LoadBalance {user_id, asset,available, locked} => {
+                    self.manager
+                        .load_balance(
+                            user_id,
+                            asset,
+                            available,
+                            locked,
+                        );
                 }
             }
         }

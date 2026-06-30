@@ -133,4 +133,19 @@ impl BalanceManager {
 
         Some(balance.clone())
     }
+
+    pub fn load_balance(&mut self, user_id: u64, asset: Asset, available: u64, locked: u64 ) {
+        let account = self
+            .accounts
+            .entry(user_id)
+            .or_insert(BalanceAccount { balances: HashMap::new()});
+
+        account.balances.insert(
+            asset,
+            Balance {
+                available,
+                locked,
+            },
+        );
+    }
 }

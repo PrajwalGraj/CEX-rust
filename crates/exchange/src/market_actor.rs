@@ -26,6 +26,9 @@ pub enum MarketCommand {
         order_id: OrderId,
         reply_to: oneshot::Sender<Option<Order>>,
     },
+    LoadOrder {
+        order: Order,
+    },
 }
 
 pub struct MarketActor {
@@ -108,6 +111,9 @@ impl MarketActor {
                         reply_to.send(None).unwrap();
                     }
                 },
+                MarketCommand::LoadOrder { order } => {
+                    self.order_book.add_resting_order(order);
+                }
             }
         }
     }

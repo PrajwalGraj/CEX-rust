@@ -167,4 +167,40 @@ impl BalanceRepository {
 
         Ok(())
     }
+
+    pub async fn load_all_balances(&self ) -> Result<Vec<(u64, Asset, u64, u64)>, sqlx::Error> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                user_id,
+                asset,
+                available,
+                locked
+            FROM balances
+            ORDER BY user_id
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut balances = Vec::new();
+
+        for row in rows {
+            let asset = match row.asset.as_str() {
+                "BTC" => Asset::BTC,
+                "SOL" => Asset::SOL,
+                "USDC" => Asset::USDC,
+                _ => panic!("Invalid asset"),
+            };
+
+            balances.push((
+                row.user_id as u64,
+                asset,
+                row.available as u64,
+                row.locked as u64,
+            ));
+        }
+
+        Ok(balances)
+    }
 }

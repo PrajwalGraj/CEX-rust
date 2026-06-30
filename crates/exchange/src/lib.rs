@@ -29,17 +29,38 @@ impl Exchange {
         .unwrap();
 
         let balance_repo = BalanceRepository::new(database.pool());
+        let order_repo = OrderRepository::new(database.pool());
+        let balances = BalanceRepository::new(database.pool()).load_all_balances().await.unwrap();
 
         let (tx, rx) = mpsc::channel(32);
         let actor = BalanceActor::new(rx, balance_repo);
         
         tokio::spawn(actor.run());
 
-        Self { 
-            markets : HashMap::new(),
-            balance_tx: tx,
-            database
+        let open_orders = order_repo.load_open_orders().await.unwrap();
+        
+        for (user_id, asset, available, locked) in balances {
+            tx.send(BalanceCommand::LoadBalance {
+                user_id,
+                asset,
+                available,
+                locked,
+            })
+            .await
+            .unwrap();
         }
+        
+        let mut exchange = Self {
+            markets: HashMap::new(),
+            balance_tx: tx,
+            database,
+        };
+
+        for order in open_orders {
+            exchange.load_order(order).await;
+        }
+
+        exchange
     }
 
     pub async fn submit_order(&mut self, order: Order) -> Result<Vec<Trade>, BalanceError>{
@@ -99,7 +120,7 @@ impl Exchange {
     }
 
     async fn unlock_reserved_funds(&mut self, order: &Order) {
-        
+
         let (asset, amount) = match order.side {
             Side::Buy => {
                 let price = order.limit_price.unwrap();
@@ -205,4 +226,33 @@ impl Exchange {
 
         true
     }
+
+    async fn load_order(&mut self, order: Order ) {
+
+    let market = order.market;
+
+    if !self.markets.contains_key(&market) {
+        let (tx, rx) = mpsc::channel(32);
+
+        let order_repo = OrderRepository::new(self.database.pool());
+        let trade_repo = TradeRepository::new(self.database.pool());
+
+        let actor = MarketActor::new(
+            rx,
+            order_repo,
+            trade_repo,
+        );
+
+        tokio::spawn(actor.run());
+
+        self.markets.insert(market, tx);
+    }
+
+    let sender = self.markets.get(&market).unwrap();
+
+    sender
+        .send(MarketCommand::LoadOrder { order })
+        .await
+        .unwrap();
+}
 }
