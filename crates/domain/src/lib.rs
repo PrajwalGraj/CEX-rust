@@ -2,6 +2,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+mod settlement;
+pub use settlement::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Asset {
@@ -109,7 +111,7 @@ pub struct Market {
 pub struct MatchResult {
     pub trades: Vec<Trade>,
     pub new_orders: Vec<Order>,
-    pub updated_orders: Vec<Order>,
+    pub updated_orders: Vec<OrderUpdate>,
 }
 
 

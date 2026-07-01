@@ -4,7 +4,7 @@ use axum::extract::Path;
 
 
 use axum::{
-    Router, extract::{Json, State}, http::request, routing::{get, post},
+    Router, extract::{Json, State}, routing::{get, post},
 };
 use domain::{Asset, Market, Order, OrderId};
 use crate::models::{ ApiResponse, BalanceResponse, DepositRequest, MarketResponse, OrderBookResponse, PlaceOrderRequest, CancelOrderRequest };
@@ -77,7 +77,7 @@ async fn get_balance(
     State(exchange) : State<Arc<Mutex<Exchange>>>,
     Path(user_id) : Path<u64>
 ) -> Json<BalanceResponse> {
-    let mut exchange = exchange.lock().await;
+    let exchange = exchange.lock().await;
 
     let btc = exchange.get_balance(user_id, Asset::BTC).await;
     let sol = exchange.get_balance(user_id, Asset::SOL).await;
@@ -96,7 +96,7 @@ async fn get_order_book(
     State(exchange): State<Arc<Mutex<Exchange>>>,
     Path(market_name): Path<String>
 ) -> Json<OrderBookResponse> {
-    let mut exchange = exchange.lock().await;
+    let exchange = exchange.lock().await;
 
     let market = match market_name.as_str(){
         "SOL-USDC" => {

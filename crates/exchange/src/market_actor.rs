@@ -1,16 +1,15 @@
 use tokio::sync::oneshot;
 
-use balance::BalanceError;
-use domain::{Order, Trade, OrderBookSnapshot, OrderId};
+use domain::{MatchResult, Order, OrderBookSnapshot, OrderId, OrderUpdate};
 use tokio::sync::mpsc::Receiver;
-use storage::{OrderRepository, TradeRepository};
+use storage::OrderRepository;
 
 use engine::OrderBook;
 
 pub enum MarketCommand {
     PlaceOrder {
         order: Order,
-        reply_to: oneshot::Sender<Vec<Trade>>,
+        reply_to: oneshot::Sender<MatchResult>,
     },
     GetBestBid {
         reply_to: oneshot::Sender<Option<u64>>,
@@ -35,16 +34,14 @@ pub struct MarketActor {
     rx: Receiver<MarketCommand>,
     order_book: OrderBook,
     order_repository: OrderRepository,
-    trade_repository: TradeRepository,
 }
 
 impl MarketActor {
-    pub fn new(rx: Receiver<MarketCommand>, order_repository: OrderRepository,  trade_repository: TradeRepository,) -> Self {
+    pub fn new(rx: Receiver<MarketCommand>, order_repository: OrderRepository) -> Self {
         Self {
             rx,
             order_book: OrderBook::new(),
             order_repository,
-            trade_repository
         }
     }
 
@@ -58,30 +55,16 @@ impl MarketActor {
                     //     .await
                     //     .unwrap();
 
-                    let trades = self.order_book.submit_order(order);
+                    let result = self.order_book.submit_order(order);
 
-                    for order in &trades.new_orders {
+                    for order in &result.new_orders {
                         self.order_repository
                             .save_order(order)
                             .await
                             .unwrap();
                     }
 
-                    for order in &trades.updated_orders {
-                        self.order_repository
-                            .update_order(order)
-                            .await
-                            .unwrap();
-                    }
-
-                    for trade in &trades.trades {
-                        self.trade_repository
-                            .save_trade(trade)
-                            .await
-                            .unwrap();
-                    }
-
-                    reply_to.send(trades.trades).unwrap();
+                    reply_to.send(result).unwrap();
                 },
                 MarketCommand::GetBestBid { reply_to } => {
                     let bid = self.order_book.best_bid();
@@ -101,8 +84,14 @@ impl MarketActor {
                     if let Some(mut order) = cancelled_order {
                         order.status = domain::OrderStatus::Cancelled;
 
+                        let update = OrderUpdate {
+                            order_id: order.id.clone(),
+                            remaining_qty: order.remaining_qty,
+                            status: order.status.clone(),
+                        };
+
                         self.order_repository
-                            .update_order(&order)
+                            .update_order(&update)
                             .await
                             .unwrap();
 

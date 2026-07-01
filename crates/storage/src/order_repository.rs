@@ -1,4 +1,4 @@
-use domain::{Asset, Market, Order, OrderId, OrderStatus, OrderType, Side, TimeInForce };
+use domain::{Asset, Market, Order, OrderId, OrderStatus, OrderType, Side, TimeInForce, OrderUpdate };
 use sqlx::{Pool, Postgres};
 
 pub struct OrderRepository {
@@ -53,7 +53,7 @@ impl OrderRepository {
 
     pub async fn update_order(
         &self,
-        order: &Order,
+        order: &OrderUpdate,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -64,7 +64,7 @@ impl OrderRepository {
             WHERE id = $1
             "#,
         )
-        .bind(order.id.0 as i64)
+        .bind(order.order_id.0 as i64)
         .bind(order.remaining_qty as i64)
         .bind(order.status.to_string())
         .execute(&self.pool)
@@ -74,8 +74,8 @@ impl OrderRepository {
     }
 
     pub async fn load_open_orders(&self ) -> Result<Vec<Order>, sqlx::Error> {
-        
-    let rows = sqlx::query!(
+
+    let rows = sqlx::query_as::<_, (i64, i64, String, String, String, String, Option<i64>, i64, i64, String, i64)>(
         r#"
         SELECT
             id,
@@ -100,33 +100,33 @@ impl OrderRepository {
     let mut orders = Vec::new();
 
     for row in rows {
-        let base = match row.base_asset.as_str() {
+        let base = match row.2.as_str() {
             "BTC" => Asset::BTC,
             "SOL" => Asset::SOL,
             "USDC" => Asset::USDC,
             _ => panic!("Invalid base asset"),
         };
 
-        let quote = match row.quote_asset.as_str() {
+        let quote = match row.3.as_str() {
             "BTC" => Asset::BTC,
             "SOL" => Asset::SOL,
             "USDC" => Asset::USDC,
             _ => panic!("Invalid quote asset"),
         };
 
-        let side = match row.side.as_str() {
+        let side = match row.4.as_str() {
             "BUY" => Side::Buy,
             "SELL" => Side::Sell,
             _ => panic!("Invalid side"),
         };
 
-        let order_type = match row.order_type.as_str() {
+        let order_type = match row.5.as_str() {
             "LIMIT" => OrderType::Limit,
             "MARKET" => OrderType::Market,
             _ => panic!("Invalid order type"),
         };
 
-        let status = match row.status.as_str() {
+        let status = match row.9.as_str() {
             "OPEN" => OrderStatus::Open,
             "PARTIALLY_FILLED" => OrderStatus::PartiallyFilled,
             "FILLED" => OrderStatus::Filled,
@@ -140,8 +140,8 @@ impl OrderRepository {
         };
 
         orders.push(Order {
-            id: OrderId(row.id as u64),
-            user_id: row.user_id as u64,
+            id: OrderId(row.0 as u64),
+            user_id: row.1 as u64,
             side,
             market: Market {
                 base,
@@ -149,11 +149,11 @@ impl OrderRepository {
             },
             order_type,
             time_in_force,
-            limit_price: row.limit_price.map(|p| p as u64),
-            original_qty: row.original_qty as u64,
-            remaining_qty: row.remaining_qty as u64,
+            limit_price: row.6.map(|p| p as u64),
+            original_qty: row.7 as u64,
+            remaining_qty: row.8 as u64,
             status,
-            sequence: row.sequence as u64,
+            sequence: row.10 as u64,
         });
     }
 

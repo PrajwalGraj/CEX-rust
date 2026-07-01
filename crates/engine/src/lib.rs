@@ -1,7 +1,6 @@
-use domain::{MatchResult, Order, OrderStatus,OrderId, OrderType, Side, Trade, OrderBookSnapshot, OrderBookLevel};
+use domain::{MatchResult, Order, OrderStatus,OrderId, OrderType, Side, Trade, OrderUpdate,OrderBookSnapshot, OrderBookLevel};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, VecDeque};
-
 pub struct OrderBook {
     bids: BTreeMap<Reverse<u64>, VecDeque<Order>>,
     asks: BTreeMap<u64, VecDeque<Order>>,
@@ -113,7 +112,11 @@ impl OrderBook {
             let order_trade = self.execute_one_match(&mut taker, &mut maker, next_trade_id);
 
             trades.push(order_trade);
-            updated_orders.push(maker.clone());
+            updated_orders.push(OrderUpdate {
+                order_id: maker.id.clone(),
+                remaining_qty: maker.remaining_qty,
+                status: maker.status.clone(),
+            });
 
             if maker.remaining_qty > 0 {
                 self.reinsert_front(maker);
@@ -128,11 +131,19 @@ impl OrderBook {
                 }
                 OrderType::Market => {
                     taker.status = OrderStatus::Cancelled;
-                    updated_orders.push(taker);
+                    updated_orders.push(OrderUpdate {
+                        order_id: taker.id,
+                        remaining_qty: taker.remaining_qty,
+                        status: taker.status.clone(),
+                    });
                 }
             }
         }else{
-            updated_orders.push(taker);
+            updated_orders.push(OrderUpdate {
+                order_id: taker.id,
+                remaining_qty: taker.remaining_qty,
+                status: taker.status.clone(),
+            });
         }
 
         MatchResult { 
@@ -207,9 +218,6 @@ impl OrderBook {
         }
 
         let trade_price = maker.limit_price.expect("Makers Limit price not availabe");
-
-        let mut buyer_id = 0;
-        let mut seller_id = 0;
 
         let (buyer_id, seller_id) = if maker.side == Side::Buy {
             (maker.user_id, taker.user_id)

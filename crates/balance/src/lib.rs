@@ -1,6 +1,6 @@
 use domain::Asset;
 use serde::Serialize;
-use std::collections::{HashMap, hash_map};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize )]
 pub struct Balance {

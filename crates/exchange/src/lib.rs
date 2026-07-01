@@ -1,4 +1,4 @@
-use storage::{Database, BalanceRepository, OrderRepository, TradeRepository};
+use storage::{BalanceRepository, Database, OrderRepository, SettlementRepository};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
@@ -6,15 +6,14 @@ use tokio::sync::oneshot;
 use crate::balance_actor::{BalanceActor, BalanceCommand};
 use crate::market_actor::{MarketActor, MarketCommand};
 use std::collections::HashMap;
-use engine::OrderBook;
-use balance::BalanceManager;
-use domain::{Market, Order, Side, Trade,OrderId, Asset, OrderBookSnapshot};
+use domain::{Asset, Market, MatchResult, Order, OrderBookSnapshot, OrderId, Side, Trade};
 use balance::{BalanceError, Balance};
 pub mod balance_actor;
 pub mod market_actor;
 pub struct Exchange {
     markets: HashMap<Market, Sender<MarketCommand>>,
     balance_tx: Sender<BalanceCommand>,
+    settlement_repository: SettlementRepository,
     database: Database,
 }
 
@@ -30,6 +29,7 @@ impl Exchange {
 
         let balance_repo = BalanceRepository::new(database.pool());
         let order_repo = OrderRepository::new(database.pool());
+        let settlement_repository = SettlementRepository::new(database.pool());
         let balances = BalanceRepository::new(database.pool()).load_all_balances().await.unwrap();
 
         let (tx, rx) = mpsc::channel(32);
@@ -49,10 +49,11 @@ impl Exchange {
             .await
             .unwrap();
         }
-        
+
         let mut exchange = Self {
             markets: HashMap::new(),
             balance_tx: tx,
+            settlement_repository,
             database,
         };
 
@@ -72,9 +73,7 @@ impl Exchange {
             let (tx, rx) = mpsc::channel(32);
 
             let order_repo = OrderRepository::new(self.database.pool());
-            let trade_repo = TradeRepository::new(self.database.pool());
-
-            let actor = MarketActor::new(rx, order_repo, trade_repo);
+            let actor = MarketActor::new(rx, order_repo);
 
             tokio::spawn(actor.run());
 
@@ -87,11 +86,10 @@ impl Exchange {
 
         sender.send(MarketCommand::PlaceOrder { order, reply_to: tx }).await.unwrap();
 
-        let trades = rx.await.unwrap();
+        let result = rx.await.unwrap();
+        let trades = result.trades.clone();
 
-        for trade in &trades {
-            self.apply_trade(trade).await?;
-        }
+        self.apply_match(result).await?;
 
         Ok(trades)
         
@@ -153,12 +151,25 @@ impl Exchange {
         rx.await.unwrap().unwrap();
     }
 
-    async fn apply_trade( &mut self, trade: &Trade ) -> Result<(), BalanceError>{
+    async fn apply_match(&mut self, result: MatchResult) -> Result<(), BalanceError> {
         let (tx, rx) = oneshot::channel();
 
-        self.balance_tx.send(BalanceCommand::ApplyTrade { trade: trade.clone(), reply_to: tx }).await.unwrap();
+        self.balance_tx
+            .send(BalanceCommand::ApplyMatch {
+                result,
+                reply_to: tx,
+            })
+            .await
+            .unwrap();
 
-        rx.await.unwrap()
+        let batch = rx.await.unwrap()?;
+
+        self.settlement_repository
+            .persist(batch)
+            .await
+            .unwrap();
+
+        Ok(())
     }
 
     pub async fn deposit(&mut self, user_id: u64, asset: Asset, amount: u64 ){
@@ -235,13 +246,7 @@ impl Exchange {
         let (tx, rx) = mpsc::channel(32);
 
         let order_repo = OrderRepository::new(self.database.pool());
-        let trade_repo = TradeRepository::new(self.database.pool());
-
-        let actor = MarketActor::new(
-            rx,
-            order_repo,
-            trade_repo,
-        );
+        let actor = MarketActor::new(rx, order_repo);
 
         tokio::spawn(actor.run());
 

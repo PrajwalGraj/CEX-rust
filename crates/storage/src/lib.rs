@@ -1,12 +1,17 @@
-use domain::{Asset, Market, Order, OrderId, OrderStatus, OrderType, Side, TimeInForce};
 use sqlx::{Pool, Postgres};
 mod balance_repository;
 mod order_repository;
 mod trade_repository;
 
+#[cfg(test)]
+use domain::{Asset, Market, Order, OrderId, OrderStatus, OrderType, OrderUpdate, Side, TimeInForce};
+
 pub use trade_repository::TradeRepository;
 pub use order_repository::OrderRepository;
 pub use balance_repository::BalanceRepository;
+
+mod settlement_repository;
+pub use settlement_repository::SettlementRepository;
 
 #[derive(Debug)]
 pub struct Database {
@@ -239,7 +244,13 @@ async fn can_update_order() {
     order.remaining_qty = 4;
     order.status = OrderStatus::PartiallyFilled;
 
-    repo.update_order(&order).await.unwrap();
+    repo.update_order(&OrderUpdate {
+        order_id: order.id.clone(),
+        remaining_qty: order.remaining_qty,
+        status: order.status.clone(),
+    })
+    .await
+    .unwrap();
 
     let row = sqlx::query_as::<_, (i64, String)>(
         r#"

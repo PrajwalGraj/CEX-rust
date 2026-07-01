@@ -1,9 +1,8 @@
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot;
 use storage::BalanceRepository;
-
 use balance::{Balance, BalanceError, BalanceManager};
-use domain::{Asset, Trade};
+use domain::{Asset, BalanceUpdate, MatchResult, SettlementBatch};
 
 pub enum BalanceCommand {
     Deposit {
@@ -30,9 +29,9 @@ pub enum BalanceCommand {
         amount: u64,
         reply_to: oneshot::Sender<Result<(), BalanceError>>,
     },
-    ApplyTrade {
-        trade: Trade,
-        reply_to: oneshot::Sender<Result<(), BalanceError>>,
+    ApplyMatch {
+        result: MatchResult,
+        reply_to: oneshot::Sender<Result<SettlementBatch, BalanceError>>,
     },
     LoadBalance {
         user_id: u64,
@@ -96,10 +95,12 @@ impl BalanceActor {
                     }
                     reply_to.send(balance).unwrap();
                 },
-                BalanceCommand::ApplyTrade { trade, reply_to } => {
-                    let result = self.settle_trade(&trade).await;
-                    
-                    reply_to.send(result).unwrap();
+                BalanceCommand::ApplyMatch { result, reply_to } => {
+                    let batch = self
+                        .settle_match(result)
+                        .await;
+
+                    reply_to.send(batch).unwrap();
                 },
                 BalanceCommand::LoadBalance {user_id, asset,available, locked} => {
                     self.manager
@@ -114,50 +115,69 @@ impl BalanceActor {
         }
     }
 
-    async fn settle_trade(
+    async fn settle_match(
         &mut self,
-        trade: &Trade,
-    ) -> Result<(), BalanceError> {
-        let (base_asset, quote_asset) = (trade.market.base, trade.market.quote);
+        result: MatchResult,
+    ) -> Result<SettlementBatch, BalanceError> {
+        let mut batch = SettlementBatch {
+            balance_updates: Vec::new(),
+            order_updates: result.updated_orders,
+            trades: result.trades.clone(),
+        };
 
-        let quote_amount = trade.quantity * trade.price;
-        let base_amount = trade.quantity;
+        for trade in &result.trades {
 
-        self.manager
-            .debit_locked(trade.buyer_user_id, quote_asset, quote_amount)?;
+            let (base_asset, quote_asset) = (trade.market.base, trade.market.quote);
 
-        self.repository
-            .debit_locked(trade.buyer_user_id, quote_asset, quote_amount)
-            .await
-            .unwrap();
+            let quote_amount = trade.quantity * trade.price;
+            let base_amount = trade.quantity;
 
+            self.manager
+                .debit_locked(trade.buyer_user_id, quote_asset, quote_amount)?;
 
-        self.manager
-            .credit_available(trade.buyer_user_id, base_asset, base_amount)?;
-
-        self.repository
-            .credit_available(trade.buyer_user_id, base_asset, base_amount)
-            .await
-            .unwrap();
-
-
-        self.manager
-            .debit_locked(trade.seller_user_id, base_asset, base_amount)?;
-
-        self.repository
-            .debit_locked(trade.seller_user_id, base_asset, base_amount)
-            .await
-            .unwrap();
+            batch.balance_updates.push(BalanceUpdate {
+                user_id: trade.buyer_user_id,
+                asset: quote_asset,
+                available_delta: 0,
+                locked_delta: -(quote_amount as i64),
+            });
 
 
-        self.manager
-            .credit_available(trade.seller_user_id, quote_asset, quote_amount)?;
+            self.manager
+                .credit_available(trade.buyer_user_id, base_asset, base_amount)?;
 
-        self.repository
-            .credit_available(trade.seller_user_id, quote_asset, quote_amount)
-            .await
-            .unwrap();
 
-        Ok(())
+            batch.balance_updates.push(BalanceUpdate {
+                user_id: trade.buyer_user_id,
+                asset: base_asset,
+                available_delta: base_amount as i64,
+                locked_delta: 0,
+            });
+
+
+            self.manager
+                .debit_locked(trade.seller_user_id, base_asset, base_amount)?;
+
+            batch.balance_updates.push(BalanceUpdate {
+                user_id: trade.seller_user_id,
+                asset: base_asset,
+                available_delta: 0,
+                locked_delta: -(base_amount as i64),
+            });
+
+
+            self.manager
+                .credit_available(trade.seller_user_id, quote_asset, quote_amount)?;
+
+            batch.balance_updates.push(BalanceUpdate {
+                user_id: trade.seller_user_id,
+                asset: quote_asset,
+                available_delta:  quote_amount as i64,
+                locked_delta: 0
+            });
+
+        }
+
+        Ok(batch)
     }
 }

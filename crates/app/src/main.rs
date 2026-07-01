@@ -1,7 +1,4 @@
-use std::collections::HashMap;
-
 use domain::{Asset, Market, Order, Side, Trade};
-use engine::OrderBook;
 use exchange::Exchange;
 
 #[tokio::main]
@@ -20,8 +17,8 @@ async fn main(){
         quote: Asset::USDC,
     };
 
-    exchange.submit_order(Order::new_limit(1, 1, Side::Sell, sol_usdc, 100, 3, 1)).await;
-    exchange.submit_order(Order::new_limit(2, 1, Side::Sell, sol_usdc, 102, 2, 2)).await;
+    let _ = exchange.submit_order(Order::new_limit(1, 1, Side::Sell, sol_usdc, 100, 3, 1)).await;
+    let _ = exchange.submit_order(Order::new_limit(2, 1, Side::Sell, sol_usdc, 102, 2, 2)).await;
 
     let trades = exchange.submit_order(Order::new_limit(3, 2, Side::Buy, sol_usdc, 105, 6, 3)).await.unwrap();
     print_trades(&trades);
@@ -29,7 +26,7 @@ async fn main(){
     print_user_balances(&exchange, 1, "Alice").await;
     print_user_balances(&exchange, 2, "Bob").await;
 
-    print_order_book(&exchange, &sol_usdc);
+    print_order_book(&exchange, &sol_usdc).await;
 }
 
 async fn print_user_balances(exchange: &Exchange, user_id: u64, name: &str) {

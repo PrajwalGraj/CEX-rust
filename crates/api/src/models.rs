@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use domain::Asset;
-use domain::{Market, Side,OrderBookSnapshot, OrderBookLevel};
+use domain::{Market, OrderBookLevel, Side};
 use balance::Balance;
 
 #[derive(Debug, Deserialize)]
